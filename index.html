@@ -735,11 +735,22 @@ body[data-review="1"] .ans-foot .d-row.compliance .d-body { display: block; }
   color: var(--muted-2);
 }
 .starters-head .link-btn { margin-left: auto; }
+/* One scrolling row at every width. Wrapping to a second row cost ~38px of
+   answer height, and the row's height changed as categories were added or the
+   window resized, so the composer shifted under the clinician's cursor. A
+   single row is a stable height and keeps the chips in one predictable place. */
 .cat-row {
-  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 9px;
-  padding-bottom: 2px;
+  display: flex; gap: 6px; flex-wrap: nowrap; margin-bottom: 9px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  padding-bottom: 6px;
+  scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
 }
+.cat-row::-webkit-scrollbar { height: 6px; }
+.cat-row::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+.cat-row::-webkit-scrollbar-track { background: transparent; }
 .cat {
+  /* Never let the flex container squeeze a chip when the row overflows. */
+  flex: none;
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--muted);
   background: var(--panel); border: 1px solid var(--line);
@@ -942,7 +953,6 @@ body[data-drawer="open"] #scrim { display: block; }
   .hint { display: none; }
   #send { min-height: 64px; min-width: 0; padding: 0 16px; }
   #send .lbl { display: none; }
-  .starters .cat-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
   .compliance-bar .spacer { margin-left: 0; }
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
@@ -2592,8 +2602,23 @@ function buildCategories() {
 
 function selectCategory(key) {
   activeCat = key;
-  for (const b of catRow.querySelectorAll('.cat'))
-    b.setAttribute('aria-selected', b.dataset.cat === key ? 'true' : 'false');
+  let active = null;
+  for (const b of catRow.querySelectorAll('.cat')) {
+    const on = b.dataset.cat === key;
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    if (on) active = b;
+  }
+
+  // In a single scrolling row the active chip can sit out of sight, which
+  // matters most when surfaceRelated() picks a category FOR the clinician
+  // after an answer. Centre it. Scrolling the row directly rather than via
+  // scrollIntoView, so this can never scroll the answer log as a side effect.
+  if (active) {
+    catRow.scrollTo({
+      left: Math.max(0, active.offsetLeft - (catRow.clientWidth - active.offsetWidth) / 2),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    });
+  }
 
   const cat = CATEGORIES.find(c => c.key === key) || CATEGORIES[0];
   qList.textContent = '';
